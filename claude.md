@@ -1,6 +1,6 @@
 # MQLs — Guía Completa de Arquitectura y Uso
 
-> Python + Google Maps + Playwright + Claude = pipeline de ventas desde cero.  
+> Python + Google Maps + Playwright = CSV de prospectos calificados desde cero.  
 > Sin pagar publicidad. Sin herramientas de pago. Replicable en cualquier nicho.
 
 ---
@@ -9,13 +9,13 @@
 
 La prospección manual es el cuello de botella de cualquier negocio que vende a empresas o profesionales locales. Buscar uno por uno en Google, copiar teléfonos a mano, armar una lista en Excel — eso no es un proceso, es un castigo.
 
-Este sistema automatiza todo eso usando tres herramientas que ya existen y son gratuitas:
+Este sistema automatiza todo eso con tres ingredientes:
 
 1. **Google Maps** tiene el directorio de negocios más completo del mundo, actualizado en tiempo real por los propios negocios.
-2. **Playwright** es una librería de Python que controla un browser real — navega, hace scroll, abre cada perfil y extrae los datos como si fuera un humano, pero en segundos.
-3. **Claude con Airtable** actúa como el filtro inteligente: lee el CSV, descarta los que no hacen fit y sube directo los leads válidos a tu CRM.
+2. **Playwright** controla un browser real — navega, hace scroll, abre cada perfil y extrae los datos como si fuera un humano, pero en segundos.
+3. **pandas** consolida todos los archivos generados en un único CSV limpio, sin duplicados.
 
-El resultado es una base de datos de prospectos calificados lista para trabajar en menos de una hora.
+El resultado: una base de datos de prospectos lista para usar en menos de una hora.
 
 ---
 
@@ -39,21 +39,8 @@ El resultado es una base de datos de prospectos calificados lista para trabajar 
 │      ↓  consolidar_leads.py                                 │
 │  Un solo CSV limpio, sin duplicados                         │
 │  (deduplicado por WhatsApp → por Nombre → reporte)         │
-└─────────────────────────────────────────────────────────────┘
-            ↓
-┌─────────────────────────────────────────────────────────────┐
-│  FASE 3 — CALIFICACIÓN Y CARGA                              │
 │                                                             │
-│  CSV limpio → Claude (claude.ai) con Airtable activado      │
-│      ↓  Claude lee, filtra por criterio de negocio          │
-│         y sube los válidos al CRM                           │
-│  Tabla LEADS en Airtable                                    │
-└─────────────────────────────────────────────────────────────┘
-            ↓
-┌─────────────────────────────────────────────────────────────┐
-│  FASE 4 — OPERACIÓN                                         │
-│                                                             │
-│  Llamadas frías / WhatsApp / Email / Seguimiento            │
+│  leads_consolidado.csv  ←  listo para usar                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -64,8 +51,6 @@ El resultado es una base de datos de prospectos calificados lista para trabajar 
 ### Requisitos previos
 
 - Python 3.8 o superior
-- Una cuenta en [Airtable](https://airtable.com) con el conector de Claude activado
-- Una cuenta en [Claude.ai](https://claude.ai)
 
 ### 1. Clonar el repositorio
 
@@ -114,10 +99,10 @@ python gmaps_scraper.py --query "veterinaria Bogotá Colombia" --output leads_ve
 |---|---|---|
 | `--query` | Búsqueda en Google Maps | `"odontólogo Bogotá Colombia"` |
 | `--output` | Nombre del CSV de salida | `leads_bogota.csv` |
-| `--city` | Ciudad para el campo Ciudad del CRM | `"Bogotá"` |
+| `--city` | Valor para el campo Ciudad | `"Bogotá"` |
 | `--max` | Máximo de resultados | `200` |
 
-**Campos del CSV de salida** (mapeados a la tabla LEADS de Airtable):
+**Campos del CSV de salida:**
 
 | Campo | Descripción |
 |---|---|
@@ -134,7 +119,7 @@ python gmaps_scraper.py --query "veterinaria Bogotá Colombia" --output leads_ve
 
 ### `python_leads.py` — Multi-ciudad por código de país
 
-Para cuando necesitas volumen. Un solo comando lanza el scraper en todas las ciudades del país.
+Para cuando necesitas volumen. Un solo comando lanza el scraper en todas las ciudades del país y guarda un CSV por cada una.
 
 ```bash
 python python_leads.py co ./leads_output/       # Colombia
@@ -178,7 +163,7 @@ python python_leads.py "Monterrey" ./output/    # Ciudad libre (cualquier query)
 | Canal | `Google Maps` |
 | Estado | `Nuevo` |
 
-> **Límite de Google Maps:** ~120 resultados por búsqueda. Para más leads en una ciudad grande, usa `gmaps_scraper.py` con queries por zona:
+> **Límite de Google Maps:** ~120 resultados por búsqueda. Para más leads en una ciudad grande, usa `gmaps_scraper.py` dividiendo por zonas:
 > ```bash
 > python gmaps_scraper.py --query "odontólogo Chapinero Bogotá" --output leads_chapinero.csv
 > python gmaps_scraper.py --query "odontólogo Suba Bogotá" --output leads_suba.csv
@@ -189,14 +174,14 @@ python python_leads.py "Monterrey" ./output/    # Ciudad libre (cualquier query)
 
 ## Fase 2 — Consolidación y deduplicación
 
-Después de correr el scraper en varias ciudades o varias zonas, tienes múltiples CSVs. `consolidar_leads.py` los fusiona en uno solo y elimina registros repetidos.
+Después de correr el scraper en varias ciudades o zonas, tienes múltiples CSVs. `consolidar_leads.py` los fusiona en uno solo y elimina duplicados.
 
 ```bash
 # Consolida todos los CSV de la carpeta actual
 python consolidar_leads.py
 
 # Desde una carpeta específica
-python consolidar_leads.py --folder "C:/Users/rodri/Desktop/DentBot/leads"
+python consolidar_leads.py --folder ./leads_output/
 
 # Con nombre de salida personalizado
 python consolidar_leads.py --folder ./leads_output/ --output leads_colombia_final.csv
@@ -204,7 +189,7 @@ python consolidar_leads.py --folder ./leads_output/ --output leads_colombia_fina
 
 **Cómo funciona la deduplicación:**
 
-1. Lee todos los archivos `.csv` de la carpeta (excepta el output anterior).
+1. Lee todos los `.csv` de la carpeta (excepto el output anterior).
 2. Separa los registros **con teléfono** de los **sin teléfono**.
 3. Deduplica los que tienen teléfono por columna `WhatsApp`.
 4. Deduplica los sin teléfono por columna `Nombre`.
@@ -231,66 +216,7 @@ python consolidar_leads.py --folder ./leads_output/ --output leads_colombia_fina
 ✅ leads_consolidado.csv guardado.
 ```
 
----
-
-## Fase 3 — Calificación y carga con Claude
-
-Con el CSV limpio en mano, abre [claude.ai](https://claude.ai) con el **conector de Airtable activado** y pégale el contenido del archivo.
-
-### Prompt base
-
-```
-Acá te paso los resultados del scraper de Google Maps para odontólogos en Colombia.
-
-Filtra únicamente los que tengan consultorio propio y atención directa a pacientes.
-Excluye: laboratorios dentales, centros de radiología, distribuidores de materiales, universidades.
-
-Por cada lead válido:
-- Sube a mi tabla LEADS en Airtable
-- Canal = "Google Maps"
-- Estado = "Nuevo"
-- Consultorio propio = true
-- Ciudad = [la que corresponda según la dirección]
-```
-
-### Variantes por nicho
-
-```
-# Veterinarias
-Filtra solo clínicas veterinarias con atención presencial.
-Excluye: tiendas de mascotas, petshops, distribuidores de alimentos.
-
-# Gimnasios
-Filtra gimnasios con membresías activas y atención presencial.
-Excluye: tiendas de suplementos, estudios de yoga sin equipos, academias deportivas escolares.
-
-# Restaurantes
-Filtra restaurantes con servicio en mesa o delivery propio.
-Excluye: food trucks sin dirección fija, catering empresarial, panaderías sin mesas.
-```
-
----
-
-## Fase 4 — Operación desde Airtable
-
-Los leads quedan en tu tabla con todos los campos listos:
-
-- **Vista Kanban** por `Estado`: Nuevo → Contactado → Interesado → Cerrado → Descartado
-- **Vista de llamadas**: ordena por `Ciudad` para hacer bloques de llamadas por zona
-- **Vista de seguimiento**: filtra por `Estado = Interesado` para las siguientes acciones
-
----
-
-## Fuentes alternativas de leads
-
-Además de Google Maps, puedes alimentar el mismo CRM con:
-
-| Fuente | Cómo usarla |
-|---|---|
-| Páginas Amarillas | Copia el texto de cada página y pégaselo a Claude |
-| LinkedIn (búsqueda manual) | Perfiles individuales → Claude extrae y sube a Airtable |
-| Apollo.io | Plan gratuito: 50 leads/mes con email verificado |
-| Outscraper.com | Alternativa sin código, ~$10 por 1,000 leads |
+Con ese archivo puedes hacer lo que quieras: importarlo a un CRM, abrirlo en Excel, pasárselo a tu equipo de ventas, procesarlo con otro script — el formato es CSV estándar.
 
 ---
 
@@ -298,23 +224,24 @@ Además de Google Maps, puedes alimentar el mismo CRM con:
 
 **Modo visible para debug:** El scraper corre headless (sin ventana). Para verlo en acción, cambia `headless=True` a `headless=False` en el script.
 
-**Horario de ejecución:** Google Maps no bloquea scrapers comunes, pero para grandes volúmenes (>500 leads seguidos) conviene correr el script en horarios de menor tráfico.
+**Para escalar a otros idiomas:** El scraper funciona con cualquier query válida de Google Maps. Cambia el texto de búsqueda al idioma del país objetivo y listo.
 
-**El CSV sale listo para Airtable:** Los headers de `gmaps_scraper.py` están mapeados exactamente a los campos de la tabla LEADS. Importa directo sin reasignar columnas.
-
-**Para escalar a otros idiomas:** El scraper funciona con cualquier query válida de Google Maps. Solo cambia el texto de búsqueda al idioma del país objetivo.
+**Volumen sin bloqueos:** Para más de 500 leads seguidos, conviene correr el script en bloques con pausas entre ciudades. Los `SCROLL_DELAY` y `DETAIL_TIMEOUT` en el código son ajustables.
 
 ---
 
-## Casos de uso validados
+## Casos de uso
 
-| Nicho | Query ejemplo | Producto que se vende |
-|---|---|---|
-| Odontólogos | `odontólogo Bogotá Colombia` | Automatizaciones de historia clínica (DentBot) |
-| Veterinarias | `veterinaria Medellín Colombia` | Sistema de citas y fichas de mascotas |
-| Gimnasios | `gimnasio Cali Colombia` | CRM de seguimiento de miembros |
-| Restaurantes | `restaurante vegano Bogotá` | Sistema de reservas o menú digital |
-| Cualquier profesional | query libre | Servicios digitales a medida |
+| Nicho | Query ejemplo |
+|---|---|
+| Odontólogos | `odontólogo Bogotá Colombia` |
+| Veterinarias | `veterinaria Medellín Colombia` |
+| Gimnasios | `gimnasio Cali Colombia` |
+| Restaurantes | `restaurante vegano Bogotá` |
+| Abogados | `abogado laboral Madrid España` |
+| Contadores | `contador público Buenos Aires` |
+
+Cualquier categoría que aparezca en Google Maps es extraíble.
 
 ---
 
